@@ -3,7 +3,7 @@ name: Trendyol Fırsat Botu
 on:
   schedule:
     - cron: "*/15 * * * *" # Her 15 dakikada bir otomatik çalışır
-  workflow_dispatch: # İstediğiniz an elle de tetikleyebilmenizi sağlar
+  workflow_dispatch: # Elle tetikleme butonu
 
 jobs:
   run-scraper:
@@ -11,12 +11,12 @@ jobs:
 
     steps:
       - name: Kodları Çek
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Node.js Kur
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Bağımlılıkları Yükle
         run: npm install
@@ -29,5 +29,9 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add gonderilenler.json
-          git commit -m "Hafıza güncellendi" || exit 0
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m "Hafıza güncellendi"
+            git push
+          else
+            echo "Yeni ürün eklenmediği için hafıza güncellemesi atlandı."
+          fi
