@@ -33,5 +33,5 @@ jobs:
             git commit -m "Hafıza güncellendi"
             git push
           else
-            echo "Yeni ürün eklenmediği için hafıza güncellemesi atlandı."
+            echo "Değişiklik olmadığı için commit atlandı."
           fi
