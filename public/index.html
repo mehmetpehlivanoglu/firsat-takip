@@ -53,20 +53,20 @@
             const data = await res.json();
             const authSection = document.getElementById('auth-section');
             if (data.loggedIn) {
-                authSection.innerHTML = \
-                    <div class="user-info">\
-                        <span></span>\
-                        <span class="badge "></span>\
-                        <button onclick="cikisYap()" style="background:#e74c3c;">Çıkış</button>\
-                    </div>\
-                ;
+                authSection.innerHTML = `
+                    <div class="user-info">
+                        <span>${data.eposta}</span>
+                        <span class="badge ${data.isVIP ? '' : 'free'}">${data.isVIP ? 'VIP Üye' : 'Ücretsiz Üye'}</span>
+                        <button onclick="cikisYap()" style="background:#e74c3c;">Çıkış</button>
+                    </div>
+                `;
             } else {
-                authSection.innerHTML = \
-                    <div class="auth-buttons">\
-                        <button onclick="modalAc(true)">Giriş Yap</button>\
-                        <button onclick="modalAc(false)">Kayıt Ol</button>\
-                    </div>\
-                ;
+                authSection.innerHTML = `
+                    <div class="auth-buttons">
+                        <button onclick="modalAc(true)">Giriş Yap</button>
+                        <button onclick="modalAc(false)">Kayıt Ol</button>
+                    </div>
+                `;
             }
         }
         function modalAc(isLogin) {
@@ -102,14 +102,14 @@
                 const container = document.getElementById('urunler');
                 container.innerHTML = '';
                 urunler.forEach(u => {
-                    container.innerHTML += \
-                        <div class="card">\
-                            <img src="" alt="">\
-                            <h3></h3>\
-                            <div class="fiyat"></div>\
-                            <a href="" target="_blank">Ürüne Git</a>\
-                        </div>\
-                    ;
+                    container.innerHTML += `
+                        <div class="card">
+                            <img src="${u.resim || 'https://via.placeholder.com/200'}" alt="${u.baslik}">
+                            <h3>${u.baslik}</h3>
+                            <div class="fiyat">${u.fiyat}</div>
+                            <a href="${u.link}" target="_blank">Ürüne Git</a>
+                        </div>
+                    `;
                 });
             } catch (err) { document.getElementById('urunler').innerHTML = 'Veriler yüklenemedi.'; }
         }
