@@ -25,14 +25,12 @@ jobs:
         run: node scraper.js
 
       - name: Hafızayı Güncelle (Mükerrer Engelleme İçin)
+        continue-on-error: true
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          touch gonderilenler.json
-          git add gonderilenler.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Hafıza güncellendi"
-            git push
-          else
-            echo "Değişiklik olmadığı için commit atlandı."
+          if [ -f gonderilenler.json ]; then
+            git add gonderilenler.json
+            git commit -m "Hafıza güncellendi" || true
+            git push || true
           fi
