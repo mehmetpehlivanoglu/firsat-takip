@@ -1,29 +1,14 @@
 const puppeteer = require('puppeteer');
-const fs = require('fs');
+const { MongoClient } = require('mongodb');
 
-// --- TELEGRAM BİLGİLERİNİZ ---
+// --- BİLGİLERİNİZ ---
 const TELEGRAM_TOKEN = '8985561217:AAEz7WWV2hcM1RaYPjXa3dDtMGDU8z7tk_0'; 
 const CHAT_ID = '8626326079';
 
+// <db_password> yazan yere MongoDB veritabanı şifrenizi yazın
+const MONGODB_URI = 'mongodb+srv://mehmetpehlivanoglu0728_db_user:<db_password>@cluster0.tvkww1d.mongodb.net/?appName=Cluster0';
+
 const URUN_LIMITI = 15;
-const HAFIZA_DOSYASI = './gonderilenler.json';
-
-function gonderilenleriOku() {
-    if (fs.existsSync(HAFIZA_DOSYASI)) {
-        try {
-            const data = fs.readFileSync(HAFIZA_DOSYASI, 'utf8');
-            return new Set(JSON.parse(data));
-        } catch (e) {
-            return new Set();
-        }
-    }
-    return new Set();
-}
-
-function gonderilenleriKaydet(gonderilenSet) {
-    const arrayData = Array.from(gonderilenSet);
-    fs.writeFileSync(HAFIZA_DOSYASI, JSON.stringify(arrayData, null, 2));
-}
 
 async function telegramaGonder(urun) {
     const mesaj = `🔥 *YENİ İNDİRİM FIRSATI!*\n\n` +
@@ -43,15 +28,8 @@ async function telegramaGonder(urun) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(bodyData)
         });
-
         const data = await response.json();
-        if (data.ok) {
-            console.log(`📲 Telegram bildirim gönderildi: ${urun.baslik}`);
-            return true;
-        } else {
-            console.error("Telegram Hata Yanıtı:", data.description);
-            return false;
-        }
+        return data.ok;
     } catch (error) {
         console.error("Telegram İstek Hatası:", error.message);
         return false;
@@ -61,18 +39,22 @@ async function telegramaGonder(urun) {
 async function firsatlariCekVeGonder() {
     console.log(`\n⏰ [${new Date().toLocaleTimeString('tr-TR')}] Tarama başlatılıyor...`);
     
-    const gonderilenler = gonderilenleriOku();
+    const client = new MongoClient(MONGODB_URI);
     
-    const browser = await puppeteer.launch({ 
-        headless: "new", 
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1366, height: 768 });
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-
     try {
+        await client.connect();
+        const db = client.db('firsatDB');
+        const urunlerKoleksiyonu = db.collection('urunler');
+
+        const browser = await puppeteer.launch({ 
+            headless: "new", 
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1366, height: 768 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
         await page.goto('https://www.trendyol.com/sr?fl=firsat-urunleri', {
             waitUntil: 'networkidle2',
             timeout: 60000
@@ -116,31 +98,30 @@ async function firsatlariCekVeGonder() {
             return liste;
         }, URUN_LIMITI);
 
-        console.log(`🔍 Toplam ${urunler.length} adet fırsat ürünü incelendi.`);
+        await browser.close();
 
         let yeniUrunSayisi = 0;
         for (const urun of urunler) {
-            if (!gonderilenler.has(urun.link)) {
-                const basarili = await telegramaGonder(urun);
-                if (basarili) {
-                    gonderilenler.add(urun.link);
-                    yeniUrunSayisi++;
-                    await new Promise(r => setTimeout(r, 1500));
-                }
+            const varMi = await urunlerKoleksiyonu.findOne({ link: urun.link });
+            
+            if (!varMi) {
+                await urunlerKoleksiyonu.insertOne({
+                    ...urun,
+                    eklenmeTarihi: new Date()
+                });
+
+                await telegramaGonder(urun);
+                yeniUrunSayisi++;
+                await new Promise(r => setTimeout(r, 1500));
             }
         }
 
-        if (yeniUrunSayisi > 0) {
-            gonderilenleriKaydet(gonderilenler);
-            console.log(`✅ ${yeniUrunSayisi} adet YENİ fırsat ürünü Telegram'a gönderildi.`);
-        } else {
-            console.log(`ℹ️ Yeni bir fırsat ürünü bulunamadı.`);
-        }
+        console.log(`✅ ${yeniUrunSayisi} adet YENİ fırsat veritabanına eklendi ve Telegram'a gönderildi.`);
 
     } catch (err) {
-        console.error("Tarama sırasında hata oluştu:", err.message);
+        console.error("Hata oluştu:", err.message);
     } finally {
-        await browser.close();
+        await client.close();
         console.log(`🎉 İşlem tamamlandı.`);
     }
 }
