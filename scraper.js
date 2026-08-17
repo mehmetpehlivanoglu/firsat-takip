@@ -5,11 +5,7 @@ const fs = require('fs');
 const TELEGRAM_TOKEN = '8985561217:AAEz7WWV2hcM1RaYPjXa3dDtMGDU8z7tk_0'; 
 const CHAT_ID = '8626326079';
 
-// Taranacak Ürün Limiti ve Tarama Aralığı (Dakika)
 const URUN_LIMITI = 15;
-const TARAMA_ARALIGI_DAKIKA = 10;
-
-// Daha önce gönderilen ürünlerin hafıza dosyası
 const HAFIZA_DOSYASI = './gonderilenler.json';
 
 function gonderilenleriOku() {
@@ -124,7 +120,6 @@ async function firsatlariCekVeGonder() {
 
         let yeniUrunSayisi = 0;
         for (const urun of urunler) {
-            // Mükerrer kontrolü: Ürün linki daha önce hafızada var mı?
             if (!gonderilenler.has(urun.link)) {
                 const basarili = await telegramaGonder(urun);
                 if (basarili) {
@@ -139,19 +134,15 @@ async function firsatlariCekVeGonder() {
             gonderilenleriKaydet(gonderilenler);
             console.log(`✅ ${yeniUrunSayisi} adet YENİ fırsat ürünü Telegram'a gönderildi.`);
         } else {
-            console.log(`ℹ️ Yeni bir fırsat ürünü bulunamadı (Tüm ürünler daha önce gönderilmiş).`);
+            console.log(`ℹ️ Yeni bir fırsat ürünü bulunamadı.`);
         }
 
     } catch (err) {
         console.error("Tarama sırasında hata oluştu:", err.message);
     } finally {
         await browser.close();
-        console.log(`⏳ Sonraki tarama ${TARAMA_ARALIGI_DAKIKA} dakika sonra yapılacak...`);
+        console.log(`🎉 İşlem tamamlandı.`);
     }
 }
 
-// İlk çalıştırma
 firsatlariCekVeGonder();
-
-// Zamanlayıcı (Her 10 dakikada bir çalışır)
-setInterval(firsatlariCekVeGonder, TARAMA_ARALIGI_DAKIKA * 60 * 1000);

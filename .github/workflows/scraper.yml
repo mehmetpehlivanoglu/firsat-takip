@@ -1,0 +1,33 @@
+name: Trendyol Fırsat Botu
+
+on:
+  schedule:
+    - cron: "*/15 * * * *" # Her 15 dakikada bir otomatik çalışır
+  workflow_dispatch: # İstediğiniz an elle de tetikleyebilmenizi sağlar
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodları Çek
+        uses: actions/checkout@v3
+
+      - name: Node.js Kur
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+
+      - name: Bağımlılıkları Yükle
+        run: npm install
+
+      - name: Botu Çalıştır
+        run: node scraper.js
+
+      - name: Hafızayı Güncelle (Mükerrer Engelleme İçin)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add gonderilenler.json
+          git commit -m "Hafıza güncellendi" || exit 0
+          git push
