@@ -4,9 +4,7 @@ const { MongoClient } = require('mongodb');
 // --- BİLGİLERİNİZ ---
 const TELEGRAM_TOKEN = '8985561217:AAEz7WWV2hcM1RaYPjXa3dDtMGDU8z7tk_0'; 
 const CHAT_ID = '8626326079';
-
-// <db_password> yazan yere MongoDB veritabanı şifrenizi yazın
-const MONGODB_URI = 'mongodb+srv://mehmetpehlivanoglu0728_db_user:<db_password>@cluster0.tvkww1d.mongodb.net/?appName=Cluster0';
+const MONGODB_URI = 'mongodb+srv://mehmetpehlivanoglu0728_db_user:Kartal2652@cluster0.tvkww1d.mongodb.net/?appName=Cluster0';
 
 const URUN_LIMITI = 15;
 

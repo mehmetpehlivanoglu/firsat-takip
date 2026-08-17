@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fırsat Takip Botu - Canlı İndirimler</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; max-width: 1200px; margin: 20px auto; }
+        .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; }
+        .card img { width: 100%; height: 200px; object-fit: contain; border-radius: 8px; }
+        .card h3 { font-size: 16px; margin: 10px 0; color: #2c3e50; min-height: 40px; }
+        .card .fiyat { font-size: 18px; font-weight: bold; color: #e74c3c; margin-bottom: 10px; }
+        .card a { display: block; text-align: center; background: #ff6000; color: white; text-decoration: none; padding: 10px; border-radius: 6px; font-weight: bold; }
+        .card a:hover { background: #e05500; }
+    </style>
+</head>
+<body>
+
+    <h1>🔥 Canlı Fırsat Ürünleri</h1>
+    <div id="urunler" class="grid">Yükleniyor...</div>
+
+    <script>
+        async function firsatlariYukle() {
+            try {
+                const res = await fetch('/api/firsatlar');
+                const urunler = await res.json();
+                const container = document.getElementById('urunler');
+                container.innerHTML = '';
+
+                if(urunler.length === 0) {
+                    container.innerHTML = '<p style="text-align:center;">Henüz veritabanında fırsat ürünü yok.</p>';
+                    return;
+                }
+
+                urunler.forEach(u => {
+                    const html = `
+                        <div class="card">
+                            <img src="${u.resim || 'https://via.placeholder.com/200'}" alt="${u.baslik}">
+                            <h3>${u.baslik}</h3>
+                            <div class="fiyat">${u.fiyat}</div>
+                            <a href="${u.link}" target="_blank">Ürüne Git</a>
+                        </div>
+                    `;
+                    container.innerHTML += html;
+                });
+            } catch (err) {
+                document.getElementById('urunler').innerHTML = 'Veriler yüklenirken hata oluştu.';
+            }
+        }
+
+        firsatlariYukle();
+    </script>
+</body>
+</html>
