@@ -1,57 +1,155 @@
 ﻿const express = require('express');
+const session = require('express-session');
 const { MongoClient, ObjectId } = require('mongodb');
 const path = require('path');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = 'firsat_takip_gizli_anahtar_123!';
+
 const MONGODB_URI = 'mongodb+srv://mehmetpehlivanoglu0728_db_user:Kartal2652@cluster0.tvkww1d.mongodb.net/?appName=Cluster0';
+let client;
+
+async function baglan() {
+    if (!client) {
+        client = new MongoClient(MONGODB_URI);
+        await client.connect();
+    }
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.use(session({
+    secret: 'gizli-anahtar-cok-gizli',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false }
+}));
+
+// Kayıt Ol
 app.post('/api/kayit', async (req, res) => {
     const { eposta, sifre } = req.body;
-    if (!eposta || !sifre) return res.status(400).json({ error: 'E-posta ve şifre zorunludur.' });
-    const client = new MongoClient(MONGODB_URI);
     try {
-        await client.connect();
+        await baglan();
         const db = client.db('firsatDB');
         const kullanicilar = db.collection('kullanicilar');
-        const mevcutKullanici = await kullanicilar.findOne({ eposta });
-        if (mevcutKullanici) return res.status(400).json({ error: 'Bu e-posta adresi zaten kayıtlı.' });
-        const hashliSifre = await bcrypt.hash(sifre, 10);
-        await kullanicilar.insertOne({ eposta, sifre: hashliSifre, isVIP: false, kayitTarihi: new Date() });
-        res.json({ success: true, message: 'Kayıt başarılı!' });
-    } catch (err) { res.status(500).json({ error: err.message }); } finally { await client.close(); }
+
+        const varMi = await kullanicilar.findOne({ eposta });
+        if (varMi) {
+            return res.status(400).json({ error: 'Bu e-posta zaten kayıtlı!' });
+        }
+
+        await kullanicilar.insertOne({
+            eposta,
+            sifre,
+            isVIP: false,
+            favoriler: [],
+            kayitTarihi: new Date()
+        });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Kayıt olurken hata oluştu.' });
+    }
 });
+
+// Giriş Yap
 app.post('/api/giris', async (req, res) => {
     const { eposta, sifre } = req.body;
-    const client = new MongoClient(MONGODB_URI);
     try {
-        await client.connect();
-        const kullanici = await client.db('firsatDB').collection('kullanicilar').findOne({ eposta });
-        if (!kullanici || !(await bcrypt.compare(sifre, kullanici.sifre))) return res.status(400).json({ error: 'Hatalı giriş.' });
-        const token = jwt.sign({ id: kullanici._id, eposta: kullanici.eposta, isVIP: kullanici.isVIP }, JWT_SECRET, { expiresIn: '7d' });
-        res.cookie('token', token, { httpOnly: true, maxAge: 604800000 });
+        await baglan();
+        const db = client.db('firsatDB');
+        const kullanicilar = db.collection('kullanicilar');
+
+        const kullanici = await kullanicilar.findOne({ eposta, sifre });
+        if (!kullanici) {
+            return res.status(400).json({ error: 'E-posta veya şifre hatalı!' });
+        }
+
+        req.session.kullaniciId = kullanici._id.toString();
+        req.session.eposta = kullanici.eposta;
+        req.session.isVIP = kullanici.isVIP || false;
+
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); } finally { await client.close(); }
+    } catch (err) {
+        res.status(500).json({ error: 'Giriş yapılırken hata oluştu.' });
+    }
 });
-app.get('/api/cikis', (req, res) => { res.clearCookie('token'); res.json({ success: true }); });
-app.get('/api/me', (req, res) => {
-    const token = req.cookies.token;
-    if (!token) return res.json({ loggedIn: false });
-    try { res.json({ loggedIn: true, ...jwt.verify(token, JWT_SECRET) }); } catch (e) { res.json({ loggedIn: false }); }
-});
-app.get('/api/firsatlar', async (req, res) => {
-    const client = new MongoClient(MONGODB_URI);
+
+// Oturum Bilgisi (/api/me) - Favoriler dahil
+app.get('/api/me', async (req, res) => {
+    if (!req.session.kullaniciId) {
+        return res.json({ loggedIn: false });
+    }
     try {
-        await client.connect();
-        const data = await client.db('firsatDB').collection('urunler').find({}).sort({ eklenmeTarihi: -1 }).limit(30).toArray();
-        res.json(data);
-    } finally { await client.close(); }
+        await baglan();
+        const db = client.db('firsatDB');
+        const kullanici = await db.collection('kullanicilar').findOne({ _id: new ObjectId(req.session.kullaniciId) });
+
+        res.json({
+            loggedIn: true,
+            eposta: req.session.eposta,
+            isVIP: req.session.isVIP,
+            favoriler: kullanici ? (kullanici.favoriler || []) : []
+        });
+    } catch (err) {
+        res.json({ loggedIn: false });
+    }
 });
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.listen(PORT, () => console.log('Sunucu calisiyor...'));
+
+// Çıkış Yap
+app.get('/api/cikis', (req, res) => {
+    req.session.destroy(() => {
+        res.json({ success: true });
+    });
+});
+
+// Fırsatları Getir
+app.get('/api/firsatlar', async (req, res) => {
+    try {
+        await baglan();
+        const db = client.db('firsatDB');
+        const urunler = await db.collection('urunler').find({}).toArray();
+        res.json(urunler);
+    } catch (err) {
+        res.status(500).json({ error: 'Fırsatlar yüklenemedi.' });
+    }
+});
+
+// Favoriye Ekle / Çıkar
+app.post('/api/favori', async (req, res) => {
+    if (!req.session.kullaniciId) {
+        return res.status(401).json({ error: 'Lütfen önce giriş yapın.' });
+    }
+
+    const { urunId } = req.body;
+    const kullaniciId = req.session.kullaniciId;
+
+    try {
+        await baglan();
+        const db = client.db('firsatDB');
+        const kullanicilar = db.collection('kullanicilar');
+
+        const kullanici = await kullanicilar.findOne({ _id: new ObjectId(kullaniciId) });
+        let favoriler = kullanici.favoriler || [];
+
+        if (favoriler.includes(urunId)) {
+            favoriler = favoriler.filter(id => id !== urunId);
+        } else {
+            favoriler.push(urunId);
+        }
+
+        await kullanicilar.updateOne(
+            { _id: new ObjectId(kullaniciId) },
+            { $set: { favoriler: favoriler } }
+        );
+
+        res.json({ success: true, favoriler });
+    } catch (err) {
+        res.status(500).json({ error: 'Favori işlemi başarısız.' });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 Sunucu çalışıyor: http://localhost:${PORT}`);
+});
