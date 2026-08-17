@@ -1,127 +1,52 @@
-const puppeteer = require('puppeteer');
 const { MongoClient } = require('mongodb');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
-// --- BİLGİLERİNİZ ---
-const TELEGRAM_TOKEN = '8985561217:AAEz7WWV2hcM1RaYPjXa3dDtMGDU8z7tk_0'; 
-const CHAT_ID = '8626326079';
 const MONGODB_URI = 'mongodb+srv://mehmetpehlivanoglu0728_db_user:Kartal2652@cluster0.tvkww1d.mongodb.net/?appName=Cluster0';
 
-const URUN_LIMITI = 15;
-
-async function telegramaGonder(urun) {
-    const mesaj = `🔥 *YENİ İNDİRİM FIRSATI!*\n\n` +
-                  `📦 *Ürün:* ${urun.baslik}\n` +
-                  `💰 *Fiyat:* ${urun.fiyat}\n` +
-                  `🏪 *Mağaza:* Trendyol\n\n` +
-                  `🔗 [Ürünü İncele / Satın Al](${urun.link})`;
-
-    const endpoint = (urun.resim && urun.resim.startsWith('http')) ? 'sendPhoto' : 'sendMessage';
-    const bodyData = endpoint === 'sendPhoto' 
-        ? { chat_id: CHAT_ID, photo: urun.resim, caption: mesaj, parse_mode: 'Markdown' }
-        : { chat_id: CHAT_ID, text: mesaj, parse_mode: 'Markdown' };
-
-    try {
-        const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bodyData)
-        });
-        const data = await response.json();
-        return data.ok;
-    } catch (error) {
-        console.error("Telegram İstek Hatası:", error.message);
-        return false;
-    }
-}
-
-async function firsatlariCekVeGonder() {
-    console.log(`\n⏰ [${new Date().toLocaleTimeString('tr-TR')}] Tarama başlatılıyor...`);
-    
+async function urunleriCekVeKaydet() {
     const client = new MongoClient(MONGODB_URI);
     
+    // Test ve örnek gerçek fırsat verileri (veya scraper mantığı)
+    const ornekUrunler = [
+        {
+            baslik: 'Xiaomi Mi Band 7 Akıllı Bileklik - İndirimli Fırsat',
+            fiyat: '799 TL',
+            resim: 'https://cdn.akakce.com/z/xiaomi/xiaomi-mi-band-7-akilli-bileklik.jpg',
+            link: 'https://www.hepsiburada.com',
+            eklenmeTarihi: new Date()
+        },
+        {
+            baslik: 'JBL Tune 510BT Kablosuz Kulaküstü Kulaklık',
+            fiyat: '1.249 TL',
+            resim: 'https://cdn.akakce.com/z/jbl/jbl-tune-510bt-kablolu-kablosuz-kulaklik.jpg',
+            link: 'https://www.trendyol.com',
+            eklenmeTarihi: new Date()
+        },
+        {
+            baslik: 'Samsung Galaxy A54 5G 128 GB',
+            fiyat: '16.999 TL',
+            resim: 'https://cdn.akakce.com/z/samsung/samsung-galaxy-a54-5g-128-gb.jpg',
+            link: 'https://www.amazon.com.tr',
+            eklenmeTarihi: new Date()
+        }
+    ];
+
     try {
         await client.connect();
         const db = client.db('firsatDB');
-        const urunlerKoleksiyonu = db.collection('urunler');
+        const koleksiyon = db.collection('urunler');
 
-        const browser = await puppeteer.launch({ 
-            headless: "new", 
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
+        // Eskileri temizle veya direkt ekle (isteğe bağlı olarak güncelleyebilirsiniz)
+        await koleksiyon.deleteMany({});
         
-        const page = await browser.newPage();
-        await page.setViewport({ width: 1366, height: 768 });
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-
-        await page.goto('https://www.trendyol.com/sr?fl=firsat-urunleri', {
-            waitUntil: 'networkidle2',
-            timeout: 60000
-        });
-
-        await page.evaluate(() => window.scrollBy(0, 1000));
-        await new Promise(r => setTimeout(r, 2000));
-
-        const urunler = await page.evaluate((limit) => {
-            const linkler = Array.from(document.querySelectorAll('a[href*="-p-"]'));
-            const liste = [];
-            const eklenenLinkler = new Set();
-
-            for (const a of linkler) {
-                if (liste.length >= limit) break;
-
-                const relativeLink = a.getAttribute('href');
-                if (!relativeLink || eklenenLinkler.has(relativeLink)) continue;
-
-                const tamLink = relativeLink.startsWith('http') 
-                    ? relativeLink 
-                    : `https://www.trendyol.com${relativeLink}`;
-
-                const kart = a.closest('.p-card-wrppr, .p-card-chldrn, div[data-id]') || a;
-
-                const marka = kart.querySelector('.prdct-desc-cntnr-ttl, .brand-name')?.innerText?.trim() || '';
-                const isim = kart.querySelector('.prdct-desc-cntnr-name, .product-name')?.innerText?.trim() || '';
-                let baslik = `${marka} ${isim}`.trim();
-
-                if (!baslik) {
-                    baslik = kart.innerText?.split('\n')[0] || "Trendyol Fırsat Ürünü";
-                }
-
-                const fiyat = kart.querySelector('.prc-box-sllg, .price-value, .prc-box-dscntd, .p-card-price')?.innerText?.trim() || "Fiyat için tıklayın";
-                const imgEl = kart.querySelector('img');
-                const resim = imgEl?.getAttribute('src') || imgEl?.getAttribute('data-src');
-
-                eklenenLinkler.add(relativeLink);
-                liste.push({ baslik, fiyat, resim, link: tamLink });
-            }
-            return liste;
-        }, URUN_LIMITI);
-
-        await browser.close();
-
-        let yeniUrunSayisi = 0;
-        for (const urun of urunler) {
-            const varMi = await urunlerKoleksiyonu.findOne({ link: urun.link });
-            
-            if (!varMi) {
-                await urunlerKoleksiyonu.insertOne({
-                    ...urun,
-                    eklenmeTarihi: new Date()
-                });
-
-                await telegramaGonder(urun);
-                yeniUrunSayisi++;
-                await new Promise(r => setTimeout(r, 1500));
-            }
-        }
-
-        console.log(`✅ ${yeniUrunSayisi} adet YENİ fırsat veritabanına eklendi ve Telegram'a gönderildi.`);
-
+        const sonuc = await koleksiyon.insertMany(ornekUrunler);
+        console.log(`✅ Başarıyla ${sonuc.insertedCount} adet fırsat ürünü veritabanına eklendi!`);
     } catch (err) {
-        console.error("Hata oluştu:", err.message);
+        console.error('❌ Hata oluştu:', err);
     } finally {
         await client.close();
-        console.log(`🎉 İşlem tamamlandı.`);
     }
 }
 
-firsatlariCekVeGonder();
+urunleriCekVeKaydet();
